@@ -383,7 +383,7 @@ def render_rays(ray_batch,
     pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples, 3]
 
 
-#     raw = run_network(pts)
+    # raw = run_network(pts)
     raw = network_query_fn(pts, viewdirs, network_fn)
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
@@ -399,7 +399,7 @@ def render_rays(ray_batch,
         pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples + N_importance, 3]
 
         run_fn = network_fn if network_fine is None else network_fine
-#         raw = run_network(pts, fn=run_fn)
+        #raw = run_network(pts, fn=run_fn)
         raw = network_query_fn(pts, viewdirs, run_fn)
 
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
@@ -576,8 +576,8 @@ def train():
         print('Loaded blender', images.shape, render_poses.shape, hwf, args.datadir)
         i_train, i_val, i_test = i_split
 
-        near = 2.
-        far = 6.
+        near = 0.3
+        far = 3.0
 
         if args.white_bkgd:
             images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
@@ -654,8 +654,40 @@ def train():
 
             rgbs, _ = render_path(render_poses, hwf, args.chunk, render_kwargs_test, gt_imgs=images, savedir=testsavedir, render_factor=args.render_factor)
             print('Done rendering', testsavedir)
-            imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
+            #imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
 
+            N = 256
+            x = np.linspace(-0.3, 0.3, N+1)
+            y = np.linspace(-0.3, 0.3, N+1)
+            z = np.linspace(-0.2, 0.4, N+1)
+
+            query_pts = np.stack(np.meshgrid(x, y, z), -1).astype(np.float32)
+            print(query_pts.shape)
+            sh = query_pts.shape
+            flat = torch.from_numpy(query_pts.reshape([-1,3]))
+
+            net_fn = render_kwargs_test["network_query_fn"]
+            fn = lambda i0, i1 : net_fn(flat[i0:i1,None,:].to(device), viewdirs=torch.zeros_like(flat[i0:i1]).to(device), network_fn=render_kwargs_test['network_fine'])
+            chunk = 1024*64
+            raw = np.concatenate([fn(i, i+chunk).cpu().numpy() for i in range(0, flat.shape[0], chunk)], 0)
+            raw = np.reshape(raw, list(sh[:-1]) + [-1])
+            sigma = np.maximum(raw[...,-1], 0.)
+
+            print(raw.shape)
+            #plt.hist(np.maximum(0,sigma.ravel()), log=True)
+            #plt.show()
+
+            import mcubes
+
+            threshold = 30.
+            print('fraction occupied', np.mean(sigma > threshold))
+            vertices, triangles = mcubes.marching_cubes(sigma, threshold)
+            print('done', vertices.shape, triangles.shape)
+            import trimesh
+
+            mesh = trimesh.Trimesh(vertices / N - .5, triangles)
+            #mesh.export("~/sink.ply")
+            mesh.show()
             return
 
     # Prepare raybatch tensor if batching random rays

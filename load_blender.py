@@ -71,9 +71,15 @@ def load_blender_data(basedir, half_res=False, testskip=1):
     H, W = imgs[0].shape[:2]
     camera_angle_x = float(meta['camera_angle_x'])
     focal = .5 * W / np.tan(.5 * camera_angle_x)
-    
-    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
-    
+
+    #pose_list = [pose_spherical(theta, -45, 1.2) for theta in np.linspace(-14.4, 14.4, 10+1)[:-1]]
+    #pose_list += [pose_spherical(theta, -45, 1.2) for theta in np.linspace(14.4, 0, 5+1)[:-1]]
+    #pose_list += [pose_spherical(0, phi, 1.2) for phi in np.linspace(-45, -90, 20+1)[:-1]]
+    #pose_list += [pose_spherical(0, phi, 1.2) for phi in np.linspace(-90, -30, 30+1)[:-1]]
+
+    #render_poses = torch.stack(pose_list, 0)
+    render_poses = torch.stack([pose_spherical(0, -45.0, 1.2)], 0)
+
     if half_res:
         H = H//2
         W = W//2
